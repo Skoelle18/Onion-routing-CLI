@@ -81,7 +81,57 @@ install\install-windows.cmd
 ```
 
 The Windows installer builds a native `onion.exe` using MSVC and vcpkg; WSL is
-not required. See `install/README.md` for flags and common fixes.
+not required. The installers detect installed tools and versions, ask before
+installing missing/outdated requirements, and do not perform a full system
+update. See `install/README.md` for flags and common fixes.
+
+### Manual steps required even with the installers
+
+The installers can install clients, build the project, and provision relay VMs
+once given an auth key. They cannot create your account, complete a browser/device
+login, or copy keys between machines.
+
+1. **Create one Tailscale account** at <https://login.tailscale.com/admin>. One
+   account is enough to test both your Windows PC and CachyOS laptop.
+2. **Generate auth key(s)** at <https://login.tailscale.com/admin/settings/keys>.
+   A single user can generate multiple auth keys. For two relay VMs, use two
+   one-use keys or one short-lived reusable key. Prefer one-use keys; revoke any
+   reusable key after the demo. Avoid ephemeral keys if you want stable VM
+   addresses across reboots. Never commit a key.
+3. **Log in on each physical laptop**:
+   - Windows: sign in through the Tailscale system tray, then run
+     `tailscale.exe ip -4`.
+   - CachyOS: run `sudo tailscale up`, then `tailscale ip -4`.
+4. **Confirm both laptops appear in the same tailnet** with `tailscale status`
+   and note their `100.x.y.z` addresses.
+5. **Supply an auth key when the installer offers relay provisioning**, or set
+   `TS_AUTHKEY` yourself before `vagrant up`:
+
+   ```bash
+   export TS_AUTHKEY='tskey-auth-...'
+   ```
+
+   ```powershell
+   $env:TS_AUTHKEY = "tskey-auth-..."
+   ```
+
+6. **Copy the printed relay lines and public keys** from each VM into
+   `relays.conf` on the sending machine. The private keys stay in the VMs.
+7. **Generate the destination keypair and start the receiver** manually:
+   `onion keygen`, then `onion listen --port 9000 --key <dest.pem>`.
+8. **If using the WireGuard alternative**, the VPS hub and peer keys are also
+   manual; see Option B under Overlay network setup.
+
+| Step | Handled by installer? |
+| --- | --- |
+| Install Tailscale client | Yes, when missing (Debian/Ubuntu: manual URL) |
+| Create account / browser or tray login | No |
+| Generate Tailscale auth key | No |
+| Install relay Tailscale and join VMs to tailnet | Yes, when provisioning a VM |
+| Copy relay/destination public keys into `relays.conf` | No |
+| Start the receiver with `onion listen` | No |
+
+Reference: <https://tailscale.com/docs/features/access-control/auth-keys>
 
 ## CLI
 

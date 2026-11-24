@@ -1,7 +1,12 @@
 # Guided installers
 
-These scripts install dependencies, build the project, run tests, and optionally
-provision a Vagrant relay. When a step fails, they print:
+These scripts check what is already installed before doing anything. They do
+**not** run a full system update or upgrade. A package manager index refresh is
+done only when an APT package actually needs to be installed on Linux.
+
+When a required tool is missing or older than the supported version, the script
+asks before installing that specific tool. Optional tools are skipped unless
+you agree. Every failure prints:
 
 ```text
 ISSUE: what failed
@@ -11,19 +16,33 @@ FIX:   the command or action to continue
 
 ## Linux (CachyOS/Arch, Debian/Ubuntu, Fedora)
 
-From Command Prompt/Terminal in the project root:
-
 ```bash
 chmod +x install/install-linux.sh
 ./install/install-linux.sh
 ```
 
-The script detects your package manager, installs core dependencies, builds,
-runs `ctest`, and offers to provision a relay VM with a hidden Tailscale auth
-key prompt. Secrets are never written to disk.
+The script:
 
-If a step fails, apply the printed `FIX` and rerun the script; completed steps
-are safe to repeat.
+1. Detects the package manager from `/etc/os-release`.
+2. Checks versions of `g++` (7.0+), `cmake` (3.16+), `git` (2.0+), `python3`
+   (3.6+), OpenSSL (1.1.1+ with headers), and GoogleTest.
+3. Installs only the specific packages that are missing or too old.
+4. Checks optional Vagrant (2.2+), VirtualBox (6.1+), and Tailscale.
+5. Builds, runs `ctest`, and offers to provision a relay VM with a hidden
+   Tailscale auth-key prompt.
+
+Supported environment overrides:
+
+```bash
+# Automatically accept installs of missing/outdated tools.
+FORCE_INSTALL=1 ./install/install-linux.sh
+
+# Never prompt. Required missing/outdated tools produce an ISSUE/WHY/FIX error.
+NONINTERACTIVE=1 ./install/install-linux.sh
+```
+
+Secrets are never written to disk. If a step fails, apply the printed `FIX`
+and rerun; completed steps are safe to repeat.
 
 ## Windows 11 (Command Prompt)
 
@@ -33,32 +52,47 @@ Double-click `install\install-windows.cmd`, or run:
 install\install-windows.cmd
 ```
 
-The wrapper launches PowerShell with the installer. It:
+The wrapper launches PowerShell with the installer. The installer checks first:
 
-1. Installs Git, CMake, and Visual Studio Build Tools with the C++ workload.
-2. Bootstraps vcpkg into `%USERPROFILE%\vcpkg`.
-3. Installs `openssl:x64-windows` and `gtest:x64-windows`.
-4. Configures with the Visual Studio 17 2022 generator.
-5. Builds and runs tests in `Release`.
-6. Offers to install Tailscale, VirtualBox, Vagrant, and optionally provision a relay.
+- **Git** 2.0+ via `git --version`.
+- **CMake** 3.16+ via `cmake --version`.
+- **Visual Studio 2022 Build Tools** 17.0+ with the C++ workload via
+  `vswhere.exe`.
+- **vcpkg**: bootstraps only if `vcpkg.exe` does not exist.
+- **vcpkg ports**: runs `vcpkg list` and installs only missing
+  `openssl:x64-windows` / `gtest:x64-windows` ports.
+- Optional **Tailscale**, **VirtualBox** (6.1+), and **Vagrant** (2.2+).
 
-To skip the overlay/Vagrant portion:
-
-```cmd
-install\install-windows.cmd -SkipVagrant
-```
-
-To skip all optional installs (useful if tools are already present):
-
-```cmd
-install\install-windows.cmd -SkipOptional
-```
-
-The native binary is:
+It then configures with the Visual Studio 17 2022 generator, builds, runs tests
+in `Release`, and produces:
 
 ```text
 build\Release\onion.exe
 ```
+
+Flags:
+
+```cmd
+:: Skip Tailscale/VirtualBox/Vagrant and relay provisioning.
+install\install-windows.cmd -SkipVagrant
+
+:: Also skip the build-tool checks. Use this only when your toolchain is ready.
+install\install-windows.cmd -SkipOptional
+
+:: Automatically accept installs of missing/outdated tools.
+install\install-windows.cmd -ForceInstall
+```
+
+`winget` is required only if a tool actually needs to be installed. If it is
+missing, the installer prints how to install App Installer from the Microsoft
+Store.
+
+## Manual steps the installers cannot do
+
+See **Manual steps required even with the installers** in `README.md`. In
+short: the installers can install clients and VMs, but you must create/sign in
+to Tailscale, generate an auth key, log in on both physical laptops, copy relay
+public keys into `relays.conf`, and start `onion listen` yourself.
 
 ## Common fixes
 
@@ -68,7 +102,7 @@ build\Release\onion.exe
 | Visual Studio generator error | Install VS 2022 Build Tools with “Desktop development with C++”. |
 | OpenSSL not found in CMake | Run `%USERPROFILE%\vcpkg\vcpkg.exe install openssl:x64-windows gtest:x64-windows`. |
 | `vboxdrv` not loading on Linux | Reboot, load `vboxdrv`, or sign VirtualBox kernel modules for Secure Boot. |
-| Tailscale IP missing | Run `tailscale up` and confirm `tailscale ip -4` on the host. |
+| Tailscale IP missing | Run `tailscale up` on Linux or sign in via the system tray on Windows, then `tailscale ip -4` / `tailscale.exe ip -4`. |
 | `vagrant up` fails | Run `vagrant up --debug`; check auth key, VirtualBox, and internet access. |
 | Tests fail on Windows | Run `ctest --test-dir build -C Release --output-on-failure -V`. |
 
