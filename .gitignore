@@ -1,0 +1,10 @@
+build/
+.vagrant/
+*.o
+*.a
+*.pem
+*.key
+keys/
+local-run/
+*.log
+.DS_Store

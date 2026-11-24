@@ -1,0 +1,10 @@
+# Onion path configuration.
+# Paths for public keys are resolved relative to this file.
+#
+# Format:
+#   relay <advertise-ip:port> <public-key.pem>
+#   destination <ip:port> <public-key.pem>
+
+relay 100.64.0.2:9001 keys/relay-b1.pub.pem
+relay 100.64.0.3:9001 keys/relay-a2.pub.pem
+destination 100.64.0.5:9000 keys/dest.pub.pem

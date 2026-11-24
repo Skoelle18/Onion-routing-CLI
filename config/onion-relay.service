@@ -1,0 +1,18 @@
+[Unit]
+Description=Onion routing relay
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/onion/relay.env
+ExecStart=/opt/onion/bin/start-relay.sh
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
