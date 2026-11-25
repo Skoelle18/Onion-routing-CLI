@@ -9,7 +9,7 @@ PUBLIC_KEY="$KEY_DIR/relay.pub.pem"
 ADDR_FILE="$KEY_DIR/advertise.addr"
 
 if [[ ! -f "$PRIVATE_KEY" || ! -f "$PUBLIC_KEY" ]]; then
-    echo "ERROR: relay keypair not found in $KEY_DIR" >&2
+    echo "ERROR: relay keypair not found or unreadable in $KEY_DIR (run with sudo)" >&2
     exit 1
 fi
 

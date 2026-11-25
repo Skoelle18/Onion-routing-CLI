@@ -93,6 +93,7 @@ function Refresh-Path {
     $gitBin = if ($programFiles) { Join-Path $programFiles 'Git\cmd' } else { $null }
     $cmakeBin = if ($programFiles) { Join-Path $programFiles 'CMake\bin' } else { $null }
     $vsInstaller = if ($programFilesX86) { Join-Path $programFilesX86 'Microsoft Visual Studio\Installer' } else { $null }
+    $vagrantBin = if ($programFiles) { Join-Path $programFiles 'Vagrant\bin' } else { $null }
     $candidates = @(
         $env:Path
         [Environment]::GetEnvironmentVariable('Path', 'Machine')
@@ -100,6 +101,7 @@ function Refresh-Path {
         $gitBin
         $cmakeBin
         $vsInstaller
+        $vagrantBin
         $script:VcpkgRoot
     )
     $entries = $candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
@@ -303,7 +305,7 @@ if (-not (Test-Path $vcpkgExe)) {
                 -Action { & git clone https://github.com/microsoft/vcpkg.git $script:VcpkgRoot }
         }
         Invoke-Checked -Why "The vcpkg bootstrapper could not download its binaries." `
-            -Fix "Run: $($script:VcpkgRoot)\bootstrap-vcpkg.bat manually and check your internet connection." `
+            -Fix "Run: `"$(Join-Path $script:VcpkgRoot 'bootstrap-vcpkg.bat')`" manually and check your internet connection." `
             -Action { & (Join-Path $script:VcpkgRoot 'bootstrap-vcpkg.bat') }
     } else {
         Write-Issue -Issue "vcpkg is required" -Why $reason `
@@ -313,22 +315,28 @@ if (-not (Test-Path $vcpkgExe)) {
 if (-not (Test-Path $vcpkgExe)) {
     Write-Issue -Issue "vcpkg.exe was not found after setup" `
         -Why "Bootstrap did not produce the executable." `
-        -Fix "Run $($script:VcpkgRoot)\bootstrap-vcpkg.bat manually."
+        -Fix "Run `"$(Join-Path $script:VcpkgRoot 'bootstrap-vcpkg.bat')`" manually."
 }
 Write-Info "vcpkg: $vcpkgExe (OK)"
 
 $requiredPorts = @('openssl:x64-windows', 'gtest:x64-windows')
+$previousErrorAction = $ErrorActionPreference
 try {
+    $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = 0
     $installedLines = & $vcpkgExe list 2>&1
+    $listExitCode = $LASTEXITCODE
 } catch {
     Write-Issue -Issue "Could not read installed vcpkg ports" `
         -Why "vcpkg list failed: $($_.Exception.Message)" `
-        -Fix "Run: $vcpkgExe list and fix any reported problem."
+        -Fix "Run: `"$vcpkgExe`" list and fix any reported problem."
+} finally {
+    $ErrorActionPreference = $previousErrorAction
 }
-if ($LASTEXITCODE -ne 0) {
+if ($listExitCode -ne 0) {
     Write-Issue -Issue "Could not read installed vcpkg ports" `
         -Why "vcpkg list failed." `
-        -Fix "Run: $vcpkgExe list and fix any reported problem."
+        -Fix "Run: `"$vcpkgExe`" list and fix any reported problem."
 }
 $missingPorts = @($requiredPorts | Where-Object {
     $port = $_
@@ -340,20 +348,38 @@ if ($missingPorts.Count -eq 0) {
     $reason = "missing vcpkg port(s): $($missingPorts -join ', ')"
     if (Confirm-Install $reason ($missingPorts -join ', ')) {
         Invoke-Checked -Why "OpenSSL or GoogleTest could not be built by vcpkg." `
-            -Fix "Run: $vcpkgExe install $($missingPorts -join ' ') and inspect the errors." `
+            -Fix "Run: `"$vcpkgExe`" install $($missingPorts -join ' ') and inspect the errors." `
             -Action { & $vcpkgExe install @missingPorts }
     } else {
         Write-Issue -Issue "Required vcpkg ports are missing" -Why $reason `
-            -Fix "Run: $vcpkgExe install $($missingPorts -join ' ')"
+            -Fix "Run: `"$vcpkgExe`" install $($missingPorts -join ' ')"
     }
 }
 
 Write-Step "Configure the project with MSVC and vcpkg"
 $toolchain = Join-Path $script:VcpkgRoot 'scripts\buildsystems\vcpkg.cmake'
-Invoke-Checked -Why "CMake could not find the Visual Studio 2022 generator or vcpkg toolchain." `
-    -Fix "Install VS 2022 Build Tools with the 'Desktop development with C++' workload, then rerun." `
+$cmakeVersion = Get-VersionFromCommand $cmake.Source @('--version')
+$vsMajor = [int]($vsVersion.Split('.')[0])
+$generator = if ($vsMajor -ge 18) { 'Visual Studio 18 2026' } else { 'Visual Studio 17 2022' }
+if ($vsMajor -ge 18 -and -not (Test-VersionAtLeast $cmakeVersion '4.2.0')) {
+    Write-Issue -Issue "CMake is too old for the installed Visual Studio" `
+        -Why "Visual Studio $vsVersion needs the '$generator' generator, which was added in CMake 4.2; found CMake $cmakeVersion." `
+        -Fix "Upgrade CMake to 4.2 or newer from https://cmake.org/download/, then rerun."
+}
+$cacheFile = Join-Path $Build 'CMakeCache.txt'
+if (Test-Path $cacheFile) {
+    $cachedGenerator = @(Get-Content -LiteralPath $cacheFile |
+        Where-Object { $_ -like 'CMAKE_GENERATOR:INTERNAL=*' } |
+        ForEach-Object { $_.Substring($_.IndexOf('=') + 1) })[0]
+    if ($cachedGenerator -and $cachedGenerator -ne $generator) {
+        Write-Info "Removing stale build cache ($cachedGenerator -> $generator)."
+        Remove-Item -LiteralPath $Build -Recurse -Force
+    }
+}
+Invoke-Checked -Why "CMake could not find the '$generator' generator or vcpkg toolchain." `
+    -Fix "Install Visual Studio with the 'Desktop development with C++' workload and a CMake version that supports '$generator', then rerun." `
     -Action {
-        cmake -S $Root -B $Build -G "Visual Studio 17 2022" -A x64 `
+        cmake -S $Root -B $Build -G $generator -A x64 `
             "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DONION_BUILD_TESTS=ON
@@ -414,8 +440,12 @@ if ($SkipOptional -or $SkipVagrant) {
         }
     }
 
-    $vagrant = Get-Command vagrant -CommandType Application -ErrorAction SilentlyContinue
-    $vagrantVersion = if ($vagrant) { Get-VersionFromCommand $vagrant.Source @('--version') } else { $null }
+    $vagrant = Find-Executable 'vagrant.exe' @(
+        (Join-Path $programFiles 'Vagrant\bin\vagrant.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\HashiCorp\Vagrant\bin\vagrant.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\vagrant.exe')
+    )
+    $vagrantVersion = if ($vagrant) { Get-VersionFromCommand $vagrant @('--version') } else { $null }
     if ($vagrantVersion -and (Test-VersionAtLeast $vagrantVersion '2.2.0')) {
         Write-Info "Vagrant: $vagrantVersion (OK)"
     } else {
@@ -436,7 +466,11 @@ if ($SkipOptional -or $SkipVagrant) {
     Write-Info "Manual Tailscale steps remain: create/sign in to an account, generate an auth key, and log in on both laptops."
     Write-Info "If VirtualBox fails to start, disable Hyper-V or reboot to load its driver."
 
-    $vagrant = Get-Command vagrant -CommandType Application -ErrorAction SilentlyContinue
+    $vagrant = Find-Executable 'vagrant.exe' @(
+        (Join-Path $programFiles 'Vagrant\bin\vagrant.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\HashiCorp\Vagrant\bin\vagrant.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\vagrant.exe')
+    )
     if ([Environment]::UserInteractive -and $vagrant) {
         $answer = Read-Host "    Provision a relay VM now? [y/N]"
         if ($answer -match '^[Yy]') {
@@ -461,12 +495,12 @@ if ($SkipOptional -or $SkipVagrant) {
             $env:OVERLAY_HOSTNAME = $hostname
             $env:RELAY_PORT = $port
 
-            Invoke-Checked -Why "vagrant up failed. Common causes: bad auth key, VirtualBox driver, or no internet." `
-                -Fix "Run: vagrant up --debug. Check Tailscale login and VirtualBox installation." `
-                -Action { vagrant up }
-            Invoke-Checked -Why "Could not read relay information from the VM." `
-                -Fix "Run: vagrant ssh, then check /etc/onion/keys." `
-                -Action { vagrant ssh -c "bash /vagrant/scripts/print-relay-info.sh" }
+            Invoke-Checked -Why "vagrant up failed. Common causes: stale VM state, bad auth key, VirtualBox driver, or no internet." `
+                -Fix "Run: `"$vagrant`" destroy -f, then `"$vagrant`" up --debug. Check Tailscale login and VirtualBox installation." `
+                -Action { & $vagrant up --provision }
+            Invoke-Checked -Why "Could not read relay information from the VM (likely an existing VM whose provisioning was skipped or failed)." `
+                -Fix "Run: `"$vagrant`" ssh -c `"sudo bash /vagrant/scripts/print-relay-info.sh`". If keys are truly missing, re-run with a valid TS_AUTHKEY and `"$vagrant`" up --provision." `
+                -Action { & $vagrant ssh -c "sudo bash /vagrant/scripts/print-relay-info.sh" }
         }
     } else {
         Write-Info "Skipped relay provisioning (non-interactive shell or Vagrant unavailable)."

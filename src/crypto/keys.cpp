@@ -11,6 +11,9 @@
 
 #ifdef _WIN32
 #include <io.h>
+extern "C" {
+#include <openssl/applink.c>
+}
 #else
 #include <sys/stat.h>
 #endif

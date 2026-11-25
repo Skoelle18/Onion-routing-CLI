@@ -313,10 +313,10 @@ if [[ -t 0 ]] && command -v vagrant >/dev/null 2>&1; then
             "Common causes: invalid TS_AUTHKEY, VirtualBox driver, or no internet in the VM. Run: vagrant up --debug" \
             env TS_AUTHKEY="$TS_AUTHKEY" RELAY_NAME="$RELAY_NAME" \
                 OVERLAY_HOSTNAME="$OVERLAY_HOSTNAME" RELAY_PORT="$RELAY_PORT" \
-                vagrant up
-        run_or_fail "Could not read relay information from the VM." \
-            "SSH into the VM manually: vagrant ssh" \
-            vagrant ssh -c "bash /vagrant/scripts/print-relay-info.sh"
+                vagrant up --provision
+        run_or_fail "Could not read relay information from the VM (the key directory is root-only)." \
+            "Run: vagrant ssh -c 'sudo bash /vagrant/scripts/print-relay-info.sh'. If keys are missing, re-run with a valid TS_AUTHKEY: vagrant up --provision" \
+            vagrant ssh -c "sudo bash /vagrant/scripts/print-relay-info.sh"
     else
         info "Skipped. Run 'vagrant up' later with TS_AUTHKEY set."
     fi

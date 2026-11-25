@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.16)
 
 project(onion VERSION 0.1.0 LANGUAGES CXX)
 
+if(MSVC)
+    set(ONION_WARNING_FLAGS /W4 /permissive-)
+else()
+    set(ONION_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -28,7 +34,7 @@ target_include_directories(onion_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_compile_options(onion_core PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(onion_core PRIVATE ${ONION_WARNING_FLAGS})
 
 target_link_libraries(onion_core
     PUBLIC OpenSSL::Crypto Threads::Threads
@@ -46,7 +52,7 @@ add_executable(onion
     src/cli/app.cpp
 )
 
-target_compile_options(onion PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(onion PRIVATE ${ONION_WARNING_FLAGS})
 target_link_libraries(onion PRIVATE onion_core)
 
 install(TARGETS onion RUNTIME DESTINATION bin)

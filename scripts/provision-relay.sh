@@ -134,4 +134,4 @@ fi
 echo ">>> relay ready"
 echo "    overlay address: ${ADVERTISE_ADDR}:${RELAY_PORT}"
 echo "    public key:      /etc/onion/keys/relay.pub.pem"
-echo "    run on the host: vagrant ssh -c 'bash /vagrant/scripts/print-relay-info.sh'"
+echo "    run on the host: vagrant ssh -c 'sudo bash /vagrant/scripts/print-relay-info.sh'"

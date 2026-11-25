@@ -104,6 +104,7 @@ public keys into `relays.conf`, and start `onion listen` yourself.
 | `vboxdrv` not loading on Linux | Reboot, load `vboxdrv`, or sign VirtualBox kernel modules for Secure Boot. |
 | Tailscale IP missing | Run `tailscale up` on Linux or sign in via the system tray on Windows, then `tailscale ip -4` / `tailscale.exe ip -4`. |
 | `vagrant up` fails | Run `vagrant up --debug`; check auth key, VirtualBox, and internet access. |
+| `relay keypair not found in /etc/onion/keys` | The key directory is root-only; run `vagrant ssh -c "sudo bash /vagrant/scripts/print-relay-info.sh"`. If keys are missing, re-run with a valid `TS_AUTHKEY` and `vagrant up --provision`. |
 | Tests fail on Windows | Run `ctest --test-dir build -C Release --output-on-failure -V`. |
 
 ## Security note

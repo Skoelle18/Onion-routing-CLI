@@ -5,7 +5,8 @@ add_executable(onion_unit_tests
     test_socket.cpp
 )
 
-target_compile_options(onion_unit_tests PRIVATE -Wall -Wextra -Wpedantic)
+set_target_properties(onion_unit_tests PROPERTIES OUTPUT_NAME test_runner)
+target_compile_options(onion_unit_tests PRIVATE ${ONION_WARNING_FLAGS})
 target_link_libraries(onion_unit_tests PRIVATE onion_core GTest::gtest_main)
 
 add_test(NAME unit_tests COMMAND onion_unit_tests)

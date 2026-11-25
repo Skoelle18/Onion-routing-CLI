@@ -277,7 +277,7 @@ On **Laptop B** (Relay 1):
 TS_AUTHKEY="$TS_AUTHKEY" \
 RELAY_NAME=relay-b1 OVERLAY_HOSTNAME=relay-b1 RELAY_PORT=9001 \
 vagrant up
-vagrant ssh -c 'bash /vagrant/scripts/print-relay-info.sh'
+vagrant ssh -c 'sudo bash /vagrant/scripts/print-relay-info.sh'
 ```
 
 On **Laptop A** (Relay 2):
@@ -286,7 +286,7 @@ On **Laptop A** (Relay 2):
 TS_AUTHKEY="$TS_AUTHKEY" \
 RELAY_NAME=relay-a2 OVERLAY_HOSTNAME=relay-a2 RELAY_PORT=9001 \
 vagrant up
-vagrant ssh -c 'bash /vagrant/scripts/print-relay-info.sh'
+vagrant ssh -c 'sudo bash /vagrant/scripts/print-relay-info.sh'
 ```
 
 On a **Windows 11** host, use PowerShell environment variables instead:
@@ -297,7 +297,7 @@ $env:RELAY_NAME = "relay-b1"
 $env:OVERLAY_HOSTNAME = "relay-b1"
 $env:RELAY_PORT = "9001"
 vagrant up
-vagrant ssh -c "bash /vagrant/scripts/print-relay-info.sh"
+vagrant ssh -c "sudo bash /vagrant/scripts/print-relay-info.sh"
 ```
 
 `vagrant up` installs build dependencies, copies the project into `/opt/onion-src`,
